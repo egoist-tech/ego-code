@@ -1,0 +1,89 @@
+foreign "C" printf(bits32 fmt, ...) -> bits32;
+foreign "C" malloc(bits32 size) -> bits32;
+foreign "C" free(bits32 ptr) -> void;
+
+bits32 leaked_ptr;
+
+vulnerable_print(bits32 input_str) {
+    bits8 local_buffer;
+    bits32 index;
+    index = 0;
+
+    copy_loop:
+        bits8 current_char;
+        current_char = bits8[input_str + index];
+        bits8[local_buffer + index] = current_char;
+        if (current_char == 0) { goto exit_copy; }
+        index = index + 1;
+        goto copy_loop;
+    exit_copy:
+
+    foreign "C" printf(local_buffer);
+    return;
+}
+
+bad_logic_0() {
+    bits32 ptr;
+    ptr = foreign "C" malloc(1024);
+    leaked_ptr = ptr;
+    if (index_counter == 999) {
+        bits32 crash_ptr;
+        crash_ptr = 0;
+        bits8[crash_ptr] = 0xFF;
+    }
+    return;
+}
+
+bad_logic_1() {
+    index_counter = index_counter + 1;
+    bad_logic_0();
+    return;
+}
+
+// ... [Для веса 50 КБ этот блок дублируется вплоть до bad_logic_350] ...
+// bad_logic_2() { index_counter = index_counter + 1; bad_logic_1(); return; }
+// bad_logic_3() { index_counter = index_counter + 1; bad_logic_2(); return; }
+
+export main() {
+    bits32 message;
+    index_counter = 0;
+
+    bad_logic_1();
+
+    message = foreign "C" malloc(32);
+    bits8[message + 0]  = 0x48; 
+    bits8[message + 1]  = 0x65; 
+    bits8[message + 2]  = 0x6C; 
+    bits8[message + 3]  = 0x6C; 
+    bits8[message + 4]  = 0x6F; 
+    bits8[message + 5]  = 0x2C; 
+    bits8[message + 6]  = 0x20; 
+    bits8[message + 7]  = 0x57; 
+    bits8[message + 8]  = 0x6F; 
+    bits8[message + 9]  = 0x72; 
+    bits8[message + 10] = 0x6C; 
+    bits8[message + 11] = 0x64; 
+    bits8[message + 12] = 0x21; 
+    bits8[message + 13] = 0x0A; 
+    bits8[message + 14] = 0x00; 
+
+    vulnerable_print(message);
+
+    bits32 format_attack;
+    format_attack = foreign "C" malloc(16);
+    bits8[format_attack + 0] = 0x25; 
+    bits8[format_attack + 1] = 0x78; 
+    bits8[format_attack + 2] = 0x20; 
+    bits8[format_attack + 3] = 0x25; 
+    bits8[format_attack + 4] = 0x78; 
+    bits8[format_attack + 5] = 0x00; 
+
+    vulnerable_print(format_attack);
+
+    foreign "C" free(message);
+    foreign "C" free(message);
+
+    return 0;
+}
+
+bits32 index_counter;
